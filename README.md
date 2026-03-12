@@ -1,5 +1,6 @@
 # CG-Lab: 万有引力粒子群仿真!
-[ezgif-8fe6e217d5ef6b24](https://github.com/user-attachments/assets/28e947ee-1d29-4ae1-8be9-ce43b5df020c)
+## 📺 效果演示
+![粒子仿真演示](./demo.gif)
 
 
 ## 🛠️ 项目环境
