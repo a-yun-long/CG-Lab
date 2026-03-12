@@ -1,4 +1,6 @@
-# CG-Lab: 万有引力粒子群仿真
+# CG-Lab: 万有引力粒子群仿真!
+[ezgif-8fe6e217d5ef6b24](https://github.com/user-attachments/assets/28e947ee-1d29-4ae1-8be9-ce43b5df020c)
+
 
 ## 🛠️ 项目环境
 - **IDE**: Trae
@@ -14,3 +16,4 @@
 ## 🚀 如何运行
 ```bash
 uv run -m src.Work0.main
+
