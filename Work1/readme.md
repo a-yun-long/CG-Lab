@@ -1,20 +1,5 @@
 # 实验二：从平面三角形到 3D 彩色立方体
-## 📂 项目结构 (Project Structure)
 
-```text
-CG-Lab (仓库根目录)
-├── src
-│   ├── Work0 (粒子仿真)
-│   └── Work1 (实验二：MVP 变换)
-│       ├── lab.py          # 基础任务：2D 三角形
-│       ├── lab1.py         # 进阶任务：3D 彩色立方体
-│       ├── triangle.gif    # 三角形运行演示
-│       ├── cube.gif        # 立方体运行演示
-│       └── README.md       # 实验二详细说明文档
-├── .gitignore              # Git 忽略配置文件
-└── README.md               # 仓库主索引说明
-
-本项目完整实现了计算机图形学中的 **MVP (Model-View-Projection)** 变换流程，并利用 **Taichi** 框架进行了实时渲染演示。
 
 ---
 
