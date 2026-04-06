@@ -2,7 +2,7 @@
 
 ## 📂 项目结构 (Directory Structure)
 
-text
+'''text
 CG-Lab (仓库根目录)
 ├── src
 │   ├── Work0 (粒子仿真)
