@@ -27,7 +27,7 @@ CG-Lab (仓库根目录)
 本项目使用现代化的 **uv** 进行包管理。
 
 1. 安装 uv: `powershell -c "irm https://astral.sh/uv/install.ps1 | iex"`
-2. 运行项目: `uv run main.py`
+2. 运行项目: `uv run bezier_curve.py`
 
 ## 🧠 核心算法：De Casteljau
 贝塞尔曲线的生成基于递归线性插值。对于给定的参数 $t \in [0, 1]$，其核心迭代公式为：
