@@ -19,7 +19,7 @@ CG-Lab (仓库根目录)
 └── README.md                # 仓库总索引
 
 本实验基于 **Python + Taichi** 实现了交互式的贝塞尔曲线绘制，深入理解了 De Casteljau 算法的几何意义及光栅化基础。
-
+'''
 ## 🚀 运行效果
 ![演示](./screenshot.gif)
 ## 🛠️ 环境配置
