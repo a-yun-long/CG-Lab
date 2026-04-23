@@ -5,7 +5,7 @@
 基于 Taichi 框架实现的交互式光线投射（Ray Casting）与局部光照（Local Illumination）渲染器。本项目无需任何外部 3D 模型文件，完全通过数学隐式方程定义几何体，并从零实现了光线求交、深度竞争、光照计算以及硬阴影等核心图形学算法。
 
 ## 📂 项目结构 (Directory Structure)
-''' text
+'''''' text
 CG-Lab (仓库根目录)
 ├── src
 │   ├── Work0 (粒子仿真)
@@ -26,7 +26,7 @@ CG-Lab (仓库根目录)
 |
 ├── .gitignore               # Git 忽略配置文件
 └── README.md                # 仓库总索引
-'''
+''''''
 
 ##  🚀 运行效果
 ![演示](./demo.gif)
