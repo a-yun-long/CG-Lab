@@ -1,0 +1,223 @@
+import taichi as ti
+
+# 初始化 Taichi，使用 GPU 后端加速
+ti.init(arch=ti.gpu)
+
+res_x, res_y = 800, 600
+pixels = ti.Vector.field(3, dtype=ti.f32, shape=(res_x, res_y))
+
+# --- 光照与材质参数 (通过 UI 实时控制) ---
+gui_params = ti.field(dtype=ti.f32, shape=4) # [Ka, Kd, Ks, Shininess]
+gui_toggles = ti.field(dtype=ti.i32, shape=2) # [Use_Blinn_Phong, Enable_Shadow]
+
+@ti.func
+def get_sphere_intersect(ro, rd):
+    # 红球参数：圆心 (-1.2, -0.2, 0)，半径 1.2
+    center = ti.Vector([-1.2, -0.2, 0.0])
+    radius = 1.2
+    oc = ro - center
+    a = rd.dot(rd)
+    half_b = oc.dot(rd)
+    c = oc.dot(oc) - radius * radius
+    discriminant = half_b * half_b - a * c
+    
+    t = 1e10
+    normal = ti.Vector([0.0, 0.0, 0.0])
+    color = ti.Vector([0.8, 0.1, 0.1]) # 深红色
+    
+    if discriminant > 0:
+        sqrtd = ti.sqrt(discriminant)
+        t_temp = (-half_b - sqrtd) / a
+        if t_temp > 0.001:
+            t = t_temp
+            hit_pos = ro + t * rd
+            normal = (hit_pos - center).normalized()
+        else:
+            t_temp = (-half_b + sqrtd) / a
+            if t_temp > 0.001:
+                t = t_temp
+                hit_pos = ro + t * rd
+                normal = (hit_pos - center).normalized()
+    return t, normal, color
+
+@ti.func
+def get_cone_intersect(ro, rd):
+    # 紫色圆锥参数：顶点 (1.2, 1.2, 0)，底面 y = -1.4，底面半径 1.2
+    apex = ti.Vector([1.2, 1.2, 0.0])
+    base_y = -1.4
+    radius = 1.2
+    height = apex.y - base_y
+    k = radius / height
+    
+    t = 1e10
+    normal = ti.Vector([0.0, 0.0, 0.0])
+    color = ti.Vector([0.6, 0.2, 0.8]) # 紫色
+    
+    # 1. 求解圆锥侧面交点 (隐式方程代入)
+    # (x - apex.x)^2 + (z - apex.z)^2 - k^2 * (y - apex.y)^2 = 0
+    oc = ro - apex
+    a = rd.x**2 + rd.z**2 - k**2 * rd.y**2
+    
+    # 【Bug 修复核心】这里之前的 k**2 前面写成了加号，现已修正为正确的减号
+    half_b = oc.x * rd.x + oc.z * rd.z - k**2 * oc.y * rd.y
+    c = oc.x**2 + oc.z**2 - k**2 * oc.y**2
+    
+    discriminant = half_b**2 - a*c
+    if discriminant > 0:
+        sqrtd = ti.sqrt(discriminant)
+        for sign in ti.static([-1, 1]):
+            t_temp = (-half_b + sign * sqrtd) / a
+            if 0.001 < t_temp < t:
+                hit_pos = ro + t_temp * rd
+                if base_y <= hit_pos.y <= apex.y:
+                    t = t_temp
+                    # 计算侧面法向量并归一化
+                    normal = ti.Vector([
+                        2.0 * (hit_pos.x - apex.x),
+                        2.0 * k**2 * (apex.y - hit_pos.y),
+                        2.0 * (hit_pos.z - apex.z)
+                    ]).normalized()
+
+    # 2. 求解圆锥底面交点 (平面求交)
+    if ti.abs(rd.y) > 1e-5:
+        t_base = (base_y - ro.y) / rd.y
+        if 0.001 < t_base < t:
+            hit_pos = ro + t_base * rd
+            # 检查是否在底面圆的半径范围内
+            if (hit_pos.x - apex.x)**2 + (hit_pos.z - apex.z)**2 <= radius**2:
+                t = t_base
+                normal = ti.Vector([0.0, -1.0, 0.0])
+                
+    return t, normal, color
+
+@ti.func
+def intersect_scene(ro, rd):
+    # 深度竞争 (Z-buffer 原理)
+    t_min = 1e10
+    hit_normal = ti.Vector([0.0, 0.0, 0.0])
+    hit_color = ti.Vector([0.0, 0.0, 0.0])
+    
+    # 检查球体
+    t_sph, n_sph, c_sph = get_sphere_intersect(ro, rd)
+    if t_sph < t_min:
+        t_min = t_sph
+        hit_normal = n_sph
+        hit_color = c_sph
+        
+    # 检查圆锥
+    t_cone, n_cone, c_cone = get_cone_intersect(ro, rd)
+    if t_cone < t_min:
+        t_min = t_cone
+        hit_normal = n_cone
+        hit_color = c_cone
+        
+    return t_min, hit_normal, hit_color
+
+@ti.kernel
+def render():
+    camera_pos = ti.Vector([0.0, 0.0, 5.0])
+    light_pos = ti.Vector([2.0, 3.0, 4.0])
+    light_color = ti.Vector([1.0, 1.0, 1.0])
+    bg_color = ti.Vector([0.0, 0.3, 0.3]) # 深青色背景
+    
+    ka = gui_params[0]
+    kd = gui_params[1]
+    ks = gui_params[2]
+    shininess = gui_params[3]
+    use_blinn = gui_toggles[0]
+    use_shadow = gui_toggles[1]
+
+    for i, j in pixels:
+        # 将像素坐标转换到 [-1, 1] 的屏幕空间，并修正宽高比
+        u = (i + 0.5) / res_x * 2.0 - 1.0
+        v = (j + 0.5) / res_y * 2.0 - 1.0
+        u *= res_x / res_y
+        
+        ray_dir = ti.Vector([u, v, -1.0]).normalized()
+        
+        t, normal, obj_color = intersect_scene(camera_pos, ray_dir)
+        
+        if t < 1e9:
+            hit_pos = camera_pos + t * ray_dir
+            view_dir = (camera_pos - hit_pos).normalized()
+            light_dir = (light_pos - hit_pos).normalized()
+            
+            # 环境光 (Ambient)
+            ambient = ka * light_color * obj_color
+            
+            diffuse = ti.Vector([0.0, 0.0, 0.0])
+            specular = ti.Vector([0.0, 0.0, 0.0])
+            
+            # --- 选做：硬阴影测试 ---
+            in_shadow = False
+            if use_shadow == 1:
+                # 沿光线方向偏移，增加偏移量防止自遮挡黑斑
+                shadow_ro = hit_pos + normal * 1e-3
+                t_shadow, _, _ = intersect_scene(shadow_ro, light_dir)
+                light_dist = (light_pos - hit_pos).norm()
+                if t_shadow < light_dist:
+                    in_shadow = True
+            
+            # 如果不在阴影中，计算 Diffuse 和 Specular
+            if not in_shadow:
+                # 漫反射 (Diffuse) - Lambert定律
+                n_dot_l = ti.max(0.0, normal.dot(light_dir))
+                diffuse = kd * n_dot_l * light_color * obj_color
+                
+                # 镜面高光 (Specular)
+                spec_factor = 0.0
+                if use_blinn == 1:
+                    # 选做：Blinn-Phong 模型
+                    half_vec = (light_dir + view_dir).normalized()
+                    n_dot_h = ti.max(0.0, normal.dot(half_vec))
+                    spec_factor = ti.math.pow(n_dot_h, shininess)
+                else:
+                    # 标准 Phong 模型
+                    reflect_dir = (2.0 * normal.dot(light_dir) * normal - light_dir).normalized()
+                    r_dot_v = ti.max(0.0, reflect_dir.dot(view_dir))
+                    spec_factor = ti.math.pow(r_dot_v, shininess)
+                
+                # 只有照亮的面才有高光
+                if n_dot_l > 0.0:
+                    specular = ks * spec_factor * light_color
+            
+            # 颜色叠加并截断，防止溢出
+            final_color = ambient + diffuse + specular
+            pixels[i, j] = ti.math.clamp(final_color, 0.0, 1.0)
+        else:
+            pixels[i, j] = bg_color
+
+def main():
+    window = ti.ui.Window("Graphics Lab - Ray Casting Shading", (res_x, res_y))
+    canvas = window.get_canvas()
+    gui = window.get_gui()
+    
+    # 初始默认参数
+    ka_val, kd_val, ks_val, shine_val = 0.2, 0.7, 0.5, 32.0
+    is_blinn, is_shadow = False, True
+    
+    while window.running:
+        # UI 面板
+        with gui.sub_window("Shading Parameters", 0.05, 0.05, 0.35, 0.35):
+            ka_val = gui.slider_float("Ka (Ambient)", ka_val, 0.0, 1.0)
+            kd_val = gui.slider_float("Kd (Diffuse)", kd_val, 0.0, 1.0)
+            ks_val = gui.slider_float("Ks (Specular)", ks_val, 0.0, 1.0)
+            shine_val = gui.slider_float("Shininess", shine_val, 1.0, 128.0)
+            is_blinn = gui.checkbox("Use Blinn-Phong", is_blinn)
+            is_shadow = gui.checkbox("Enable Hard Shadow", is_shadow)
+        
+        # 将 UI 数据传入 Kernel
+        gui_params[0] = ka_val
+        gui_params[1] = kd_val
+        gui_params[2] = ks_val
+        gui_params[3] = shine_val
+        gui_toggles[0] = 1 if is_blinn else 0
+        gui_toggles[1] = 1 if is_shadow else 0
+        
+        # 渲染与显示
+        render()
+        canvas.set_image(pixels)
+        window.show()
+
+if __name__ == "__main__":
+    main()
