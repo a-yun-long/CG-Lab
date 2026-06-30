@@ -1,0 +1,12 @@
+# 优化输出目录
+output/
+test_output/
+demo_output/
+
+# 测试生成的临时图片
+test_silhouette.png
+test_sphere_silhouette.png
+
+# Python 缓存
+__pycache__/
+*.pyc
